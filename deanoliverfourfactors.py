@@ -14,8 +14,7 @@ import seaborn as sns #another visual tool
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #only using the Dean Oliver 4 Factors as we want to analyze the impact that this
 #can possibly have on the outcome of these games, most specifically to PVTO
-four_factors = ['Efg%', 'Opp_Efg%',	'Ft/Fga',	'Opp_Ft/Fga', 
-                'RebO%',	'RebD%',	'To%', 'Opp_To%']
+four_factors = ['Efg%', 'Opp_Efg%',	'Ft/Fga',	'Opp_Ft/Fga', 'RebO%',	'RebD%',	'To%', 'Opp_To%']
 
 #add the chosen path of desire
 def prepare_data(path):
@@ -46,7 +45,7 @@ def prepare_data(path):
   return [factors, dataset['Name']]
 
 #copy-paste your desired file path here
-file_path = '/content/drive/MyDrive/2022 PVTO Data Analytics Team'
+file_path = ' '
 
 #keeping the team name for the last function in this script
 model_data, team_name = prepare_data(file_path)
