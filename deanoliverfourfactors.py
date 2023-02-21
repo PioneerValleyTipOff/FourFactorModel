@@ -210,7 +210,7 @@ def rank_system(path,coeff,factors):
         boys_data.sort_values(by='Score', ascending=False).to_excel(
             writer, sheet_name='Boys', index=False)
   
-  return 'Rank workbook uploaded.'
+  return 'Rank data uploaded.'
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #functions to run. to keep it safe, run them in order as this isn't perfect
 #designed script. improvements expected to be made upon what has been done.
