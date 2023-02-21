@@ -2,6 +2,7 @@
 #along with historical data. if possible, try to acquire other high school teams
 #data or ask the teams for data from previous season for guidance.
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#make sure that xlsxwriter, openpyxl, and sklearn are installed
 import pandas as pd #read in the dataset and use certain columns
 import numpy as np #added when working with datasets like this one to complete operations faster
 from sklearn.model_selection import train_test_split #needed to train and test model
@@ -45,7 +46,7 @@ def prepare_data(path):
   return [factors, dataset['Name']]
 
 #copy-paste your desired file path here
-file_path = ' '
+file_path = '/content/drive/MyDrive/2022 PVTO Data Analytics Team'
 
 #keeping the team name for the last function in this script
 model_data, team_name = prepare_data(file_path)
@@ -93,8 +94,9 @@ def logit_model(N):
   coefficients = pd.concat([pd.DataFrame(np.concatenate(intercept), columns=['Intercept']),
                           pd.DataFrame(np.concatenate(coeff), columns=four_factors)],axis=1)
   
-  #taking the average of the coefficients from all of the runs of the model
   parameters = list(coefficients.columns)
+  
+  #taking the average of the coefficients from all of the runs of the model
   model_coefficients = [np.round(coefficients[j].mean(),6) for j in parameters]
 
   #vital for further anaylsis
@@ -123,31 +125,25 @@ def prediction_matrix(grid):
   plt.rcParams["figure.figsize"] = (10,8)
   plt.show()
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-model_coeff = analyze_model[2]
-model_parameters = analyze_model[3]
-
 #print out the equation for the paper
-equation = ' w = ' + str(model_coeff[0]) + ' + '
+def display_equation(coeff,factors):
+  equation = ' w = ' + str(coeff[0]) + ' + '
 
-for i in range(1,len(model_parameters)):
-  equation += '(' + str(model_coeff[i]) + '*' + model_parameters[i] + ')'
-  if i < len(model_parameters)-1:
-    equation += ' + '
+  for i in range(1,len(factors)):
+    equation += '(' + str(coeff[i]) + '*' + factors[i] + ')'
+    if i < len(factors)-1:
+      equation += ' + '
 
-print(equation)
+  return equation
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #displays which features are most important for positive and negative values
-def feature_importance():
-  model_parameters.remove(model_parameters[0])
-  model_coeff.remove(model_coeff[0])
-
+def feature_importance(coeff,factors):
   #adding the model coefficent values to the graph. this is to visualize the 
   #feature importance (most important to team success)
   fig, ax = plt.subplots()
 
   #color is blue if positive and red when negative
-  pps = ax.bar(model_parameters,model_coeff,
-               color=['blue' if j >= 0 else 'red' for j in model_coeff])
+  pps = ax.bar(factors,coeff,color=['blue' if j >= 0 else 'red' for j in coeff])
   for p in pps:
    ax.annotate('{}'.format(p.get_height()),xy=(p.get_x() + p.get_width() / 2, p.get_height()),
                xytext=(0, 3),textcoords="offset points", ha='center', va='bottom')
@@ -158,58 +154,78 @@ def feature_importance():
   plt.show()
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #devise ranking system using the model  
-def rank_system(path):
-  weights = dict(zip(model_parameters, np.round(model_coeff,2)))
+def rank_system(path,coeff,factors):
+  weights = dict(zip(factors, np.round(coeff,2)))
 
   #in this ranking system, we are seeing how the teams perform in which there is 
   #no dependency on how the opposing team played over the course of the game. this
   #can show that a team can play well in a loss or poorly in a win.
-  for i in model_parameters:
+  for i in factors:
     if 'Opp' in i:
       del weights[i]
       model_data.drop([i], axis=1, inplace=True)
 
   model_data.drop(['Result'], axis=1, inplace=True)
 
-  #using the formula from the paper without opposing team stats
-  score = model_data.dot(pd.Series(weights))
-  negate_lowest_value = -1*weights['To%']
+  total_weights = np.round(sum(weights.values()),2)
 
-  total_weights = sum(weights.values())
-
-  #the total weights of the model need to equal 1 to help minick percentage
   if total_weights > 1:
     diff = total_weights - 1
   else:
     diff = 0
 
+  negate_lowest_value = -1*weights['To%']
+  efg_three_factor = np.round(weights['Efg%']*.5,2)
+  max_value = total_weights-diff+negate_lowest_value+efg_three_factor
+
+  #using the formula from the paper without opposing team stats
+  score = model_data.dot(pd.Series(weights)) + negate_lowest_value 
+
   #to get a more decifering score, we multiply it by 10. as referenced in the paper,
   #we are trying to create a ranking system from 0-10 in which 10 is absolute 
   #perfection while 0 is where the team did absolutely everything wrong
-  rank = np.round((10*((score-diff+negate_lowest_value)/(total_weights-diff+negate_lowest_value))),1)
+  rank = np.round((10*(score/max_value)),1)
 
-  teams_score = pd.concat([team_name,rank],axis=1)
+  ratings = list(rank)
+  for i in range(len(ratings)):
+    if ratings[i] > 10:
+      ratings[i] = 10*(ratings[i]*(1/ratings[i]))
+    else:
+      continue
+
+  teams_score = pd.concat([team_name,pd.DataFrame(ratings)],axis=1)
   teams_score.columns = ['Team', 'Score']
 
   #separate the rankings into girls and boys teams so that we are ranking the teams
   #in relative to what their competition level would be like
   girls_data = teams_score[teams_score['Team'].str.endswith('G')]
-  girls_data.sort_values(by='Score', ascending=False)
-
   boys_data = teams_score[teams_score['Team'].str.endswith('B')]
-  boys_data.sort_values(by='Score', ascending=False)
 
-  with pd.ExcelWriter(path + '/PVTOData.xlsx', engine='openpyxl', mode='a') as writer:
+  writer = pd.ExcelWriter(path + '/RankData.xlsx', engine='xlsxwriter')
+  writer.save()
+
+  #puts each of the player and team data into separate sheets
+  with pd.ExcelWriter(path + '/RankData.xlsx', engine='openpyxl', mode='a') as writer:
         girls_data.sort_values(by='Score', ascending=False).to_excel(
-            writer, sheet_name='GirlRankData', index=False)
+            writer, sheet_name='Girls', index=False)
         boys_data.sort_values(by='Score', ascending=False).to_excel(
-            writer, sheet_name='BoyRankData', index=False)
+            writer, sheet_name='Boys', index=False)
   
-  return 'Rank data uploaded to workbook.'
+  return 'Rank workbook uploaded.'
 #------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #functions to run. to keep it safe, run them in order as this isn't perfect
 #designed script. improvements expected to be made upon what has been done.
+model_coeff = analyze_model[2]
+model_parameters = analyze_model[3]
+
 model_score(analyze_model[0])
 prediction_matrix(analyze_model[1])
-feature_importance()
-rank_system(file_path)
+display_equation(model_coeff, model_parameters)
+
+#removing model intercept as it's not used when ranking the teams or seeing which 
+#features were the most important for the model
+model_parameters.remove(model_parameters[0])
+model_coeff.remove(model_coeff[0])
+
+feature_importance(model_coeff, model_parameters)
+rank_system(file_path,model_coeff,model_parameters)
